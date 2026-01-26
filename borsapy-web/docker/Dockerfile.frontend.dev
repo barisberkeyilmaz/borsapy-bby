@@ -1,0 +1,17 @@
+FROM node:20-alpine
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml* ./
+
+# Install dependencies
+RUN pnpm install
+
+# Source code will be mounted as volume
+EXPOSE 3000
+
+CMD ["pnpm", "dev"]

@@ -1,0 +1,228 @@
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Screener API
+export interface Template {
+  name: string;
+  description: string;
+}
+
+export interface ScreenerResult {
+  results: Record<string, unknown>[];
+  count: number;
+  template: string | null;
+}
+
+export interface FilterCriteria {
+  criteria: string;
+  min?: number;
+  max?: number;
+  required?: boolean;
+}
+
+export interface ScreenerRequest {
+  filters?: FilterCriteria[];
+  sector?: string;
+  index?: string;
+  recommendation?: string;
+}
+
+export interface CriteriaInfo {
+  id: string;
+  name: string;
+  min?: string;
+  max?: string;
+}
+
+export const screenerApi = {
+  getTemplates: () => fetchApi<Template[]>("/api/screener/templates"),
+  runTemplate: (name: string) => fetchApi<ScreenerResult>(`/api/screener/templates/${name}`),
+  runCustom: (request: ScreenerRequest) =>
+    fetchApi<ScreenerResult>("/api/screener/run", {
+      method: "POST",
+      body: JSON.stringify(request),
+    }),
+  getCriteria: () => fetchApi<CriteriaInfo[]>("/api/screener/criteria"),
+  getSectors: () => fetchApi<string[]>("/api/screener/sectors"),
+  getIndices: () => fetchApi<string[]>("/api/screener/indices"),
+};
+
+// Stocks API
+export interface StockInfo {
+  symbol: string;
+  name?: string;
+  last_price?: number;
+  change?: number;
+  change_percent?: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  volume?: number;
+  market_cap?: number;
+  pe_ratio?: number;
+  pb_ratio?: number;
+  year_high?: number;
+  year_low?: number;
+}
+
+export interface StockHistory {
+  Date: string;
+  Open: number;
+  High: number;
+  Low: number;
+  Close: number;
+  Volume: number;
+}
+
+export interface SearchResult {
+  symbol: string;
+  name: string;
+  type: string;
+}
+
+export interface TechnicalIndicators {
+  rsi?: number;
+  macd?: number;
+  macd_signal?: number;
+  sma_20?: number;
+  sma_50?: number;
+  sma_200?: number;
+  ema_12?: number;
+  ema_26?: number;
+  bollinger_upper?: number;
+  bollinger_lower?: number;
+  bollinger_mid?: number;
+  atr?: number;
+  stoch_k?: number;
+  stoch_d?: number;
+}
+
+export interface Crossover {
+  type: "bullish" | "bearish";
+  date: string;
+  days_ago: number;
+}
+
+export interface TechnicalSignal {
+  indicator: string;
+  signal: string;
+  type: "bullish" | "bearish" | "neutral";
+}
+
+export interface TechnicalAnalysis {
+  indicators: TechnicalIndicators;
+  crossovers: {
+    sma_50_200?: Crossover;
+    sma_20_50?: Crossover;
+    macd?: Crossover;
+  };
+  signals: TechnicalSignal[];
+  current_price?: number;
+}
+
+export interface Performance {
+  "1w"?: number;
+  "1m"?: number;
+  "3m"?: number;
+  "6m"?: number;
+  "1y"?: number;
+  ytd?: number;
+}
+
+export const stocksApi = {
+  getInfo: (symbol: string) => fetchApi<StockInfo>(`/api/stocks/${symbol}`),
+  getHistory: (symbol: string, period = "1mo", interval = "1d") =>
+    fetchApi<StockHistory[]>(`/api/stocks/${symbol}/history?period=${period}&interval=${interval}`),
+  getFastInfo: (symbol: string) => fetchApi<StockInfo>(`/api/stocks/${symbol}/fast-info`),
+  search: (query: string) => fetchApi<SearchResult[]>(`/api/stocks/search?q=${encodeURIComponent(query)}`),
+  getTechnicals: (symbol: string) => fetchApi<TechnicalAnalysis>(`/api/stocks/${symbol}/technicals`),
+  getPerformance: (symbol: string) => fetchApi<Performance>(`/api/stocks/${symbol}/performance`),
+};
+
+// Market API
+export interface MarketSummary {
+  indices: {
+    name: string;
+    value: number;
+    change: number;
+    change_percent: number;
+  }[];
+}
+
+export const marketApi = {
+  getSummary: () => fetchApi<MarketSummary>("/api/market/summary"),
+};
+
+// Backtest API
+export interface BacktestStrategy {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface BacktestRequest {
+  symbol: string;
+  strategy: string;
+  period: string;
+  initial_capital: number;
+  commission: number;
+}
+
+export interface BacktestTrade {
+  entry_time: string | null;
+  entry_price: number | null;
+  exit_time: string | null;
+  exit_price: number | null;
+  side: string;
+  shares: number;
+  profit: number | null;
+  profit_pct: number | null;
+}
+
+export interface BacktestResult {
+  symbol: string;
+  strategy_name: string;
+  period: string;
+  initial_capital: number;
+  final_equity: number | null;
+  net_profit: number | null;
+  net_profit_pct: number | null;
+  total_trades: number | null;
+  winning_trades: number | null;
+  losing_trades: number | null;
+  win_rate: number | null;
+  profit_factor: number | null;
+  max_drawdown: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  buy_hold_return: number | null;
+  vs_buy_hold: number | null;
+  trades: BacktestTrade[];
+  equity_curve: { date: string; equity: number }[];
+}
+
+export const backtestApi = {
+  getStrategies: () => fetchApi<BacktestStrategy[]>("/api/backtest/strategies"),
+  run: (request: BacktestRequest) =>
+    fetchApi<BacktestResult>("/api/backtest/run", {
+      method: "POST",
+      body: JSON.stringify(request),
+    }),
+};

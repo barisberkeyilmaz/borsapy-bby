@@ -1,0 +1,17 @@
+{
+  "name": "borsapy-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev:backend": "cd apps/backend && source venv/bin/activate && uvicorn app.main:app --reload --port 8000",
+    "build:frontend": "pnpm --filter frontend build"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
