@@ -60,6 +60,10 @@ class Trade:
         side: Trade direction ('long' or 'short').
         shares: Number of shares traded.
         commission: Total commission paid (entry + exit).
+        entry_indicators: Indicator values at entry.
+        exit_indicators: Indicator values at exit.
+        entry_reason: Why the trade was opened.
+        exit_reason: Why the trade was closed.
     """
 
     entry_time: datetime
@@ -69,6 +73,10 @@ class Trade:
     side: Literal["long", "short"] = "long"
     shares: float = 0.0
     commission: float = 0.0
+    entry_indicators: dict[str, float] = field(default_factory=dict)
+    exit_indicators: dict[str, float] = field(default_factory=dict)
+    entry_reason: str = ""
+    exit_reason: str = ""
 
     @property
     def is_closed(self) -> bool:
@@ -120,6 +128,10 @@ class Trade:
             "profit": self.profit,
             "profit_pct": self.profit_pct,
             "duration": self.duration,
+            "entry_indicators": self.entry_indicators,
+            "exit_indicators": self.exit_indicators,
+            "entry_reason": self.entry_reason,
+            "exit_reason": self.exit_reason,
         }
 
 
@@ -688,6 +700,53 @@ class Backtest:
             "_index": idx,
         }
 
+    def _build_signal_reason(self, signal: str, indicators: dict[str, float]) -> str:
+        """Build human-readable signal reason based on indicators."""
+        reasons = []
+
+        # RSI-based reasons
+        rsi = indicators.get("rsi")
+        if rsi is not None:
+            if signal == "BUY" and rsi < 30:
+                reasons.append(f"RSI aşırı satım ({rsi:.1f})")
+            elif signal == "SELL" and rsi > 70:
+                reasons.append(f"RSI aşırı alım ({rsi:.1f})")
+            elif rsi < 40:
+                reasons.append(f"RSI düşük ({rsi:.1f})")
+            elif rsi > 60:
+                reasons.append(f"RSI yüksek ({rsi:.1f})")
+
+        # MACD-based reasons
+        macd = indicators.get("macd")
+        macd_signal = indicators.get("macd_signal")
+        if macd is not None and macd_signal is not None:
+            if signal == "BUY" and macd > macd_signal:
+                reasons.append(f"MACD yukarı kesişim ({macd:.2f} > {macd_signal:.2f})")
+            elif signal == "SELL" and macd < macd_signal:
+                reasons.append(f"MACD aşağı kesişim ({macd:.2f} < {macd_signal:.2f})")
+
+        # SMA-based reasons
+        sma_20 = indicators.get("sma_20")
+        sma_50 = indicators.get("sma_50")
+        if sma_20 is not None and sma_50 is not None:
+            if signal == "BUY" and sma_20 > sma_50:
+                reasons.append(f"SMA20 > SMA50 ({sma_20:.2f} > {sma_50:.2f})")
+            elif signal == "SELL" and sma_20 < sma_50:
+                reasons.append(f"SMA20 < SMA50 ({sma_20:.2f} < {sma_50:.2f})")
+
+        # Bollinger-based reasons
+        bb_lower = indicators.get("bb_lower")
+        bb_upper = indicators.get("bb_upper")
+        if bb_lower is not None and bb_upper is not None:
+            close = indicators.get("close")
+            if close is not None:
+                if signal == "BUY" and close < bb_lower:
+                    reasons.append(f"Fiyat BB alt bandının altında")
+                elif signal == "SELL" and close > bb_upper:
+                    reasons.append(f"Fiyat BB üst bandının üstünde")
+
+        return " | ".join(reasons) if reasons else signal
+
     def run(self) -> BacktestResult:
         """
         Run the backtest.
@@ -737,12 +796,17 @@ class Backtest:
                 available = cash - entry_commission
                 shares = available / price
 
+                # Build entry reason based on indicators
+                entry_reason = self._build_signal_reason("BUY", indicators)
+
                 current_trade = Trade(
                     entry_time=timestamp,
                     entry_price=price,
                     side="long",
                     shares=shares,
                     commission=entry_commission,
+                    entry_indicators=indicators.copy(),
+                    entry_reason=entry_reason,
                 )
 
                 cash = 0.0
@@ -753,9 +817,14 @@ class Backtest:
                 exit_value = shares * price
                 exit_commission = exit_value * self.commission
 
+                # Build exit reason based on indicators
+                exit_reason = self._build_signal_reason("SELL", indicators)
+
                 current_trade.exit_time = timestamp
                 current_trade.exit_price = price
                 current_trade.commission += exit_commission
+                current_trade.exit_indicators = indicators.copy()
+                current_trade.exit_reason = exit_reason
 
                 trades.append(current_trade)
 

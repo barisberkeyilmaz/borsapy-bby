@@ -126,6 +126,11 @@ export interface TechnicalSignal {
   type: "bullish" | "bearish" | "neutral";
 }
 
+export interface PriceRange {
+  low: number;
+  high: number;
+}
+
 export interface TechnicalAnalysis {
   indicators: TechnicalIndicators;
   crossovers: {
@@ -135,6 +140,11 @@ export interface TechnicalAnalysis {
   };
   signals: TechnicalSignal[];
   current_price?: number;
+  price_ranges?: {
+    "7d"?: PriceRange;
+    "50d"?: PriceRange;
+    "200d"?: PriceRange;
+  };
 }
 
 export interface Performance {
@@ -194,6 +204,10 @@ export interface BacktestTrade {
   shares: number;
   profit: number | null;
   profit_pct: number | null;
+  entry_indicators: Record<string, number>;
+  exit_indicators: Record<string, number>;
+  entry_reason: string;
+  exit_reason: string;
 }
 
 export interface BacktestResult {
@@ -225,4 +239,82 @@ export const backtestApi = {
       method: "POST",
       body: JSON.stringify(request),
     }),
+};
+
+// Scanner API
+export interface ScanRequest {
+  conditions: string[];
+  universe: string;
+  interval: string;
+  limit: number;
+}
+
+export interface ScanResultItem {
+  symbol: string;
+  close?: number;
+  volume?: number;
+  change?: number;
+  change_percent?: number;
+  market_cap?: number;
+  rsi?: number;
+  macd?: number;
+  signal?: number;
+  sma_20?: number;
+  sma_50?: number;
+  sma_200?: number;
+  stoch_k?: number;
+  stoch_d?: number;
+  conditions_met?: string[];
+  [key: string]: unknown;
+}
+
+export interface ScanResult {
+  results: ScanResultItem[];
+  count: number;
+  conditions: string[];
+  universe: string;
+  interval: string;
+}
+
+export interface ScanPreset {
+  id: string;
+  name: string;
+  description: string;
+  conditions: string[];
+  category: string;
+}
+
+export interface IndicatorInfo {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface IndicatorCategory {
+  category: string;
+  indicators: IndicatorInfo[];
+}
+
+export interface Universe {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface Interval {
+  id: string;
+  name: string;
+  category: string;
+}
+
+export const scannerApi = {
+  run: (request: ScanRequest) =>
+    fetchApi<ScanResult>("/api/scanner/run", {
+      method: "POST",
+      body: JSON.stringify(request),
+    }),
+  getPresets: () => fetchApi<ScanPreset[]>("/api/scanner/presets"),
+  getIndicators: () => fetchApi<IndicatorCategory[]>("/api/scanner/indicators"),
+  getUniverses: () => fetchApi<Universe[]>("/api/scanner/universes"),
+  getIntervals: () => fetchApi<Interval[]>("/api/scanner/intervals"),
 };

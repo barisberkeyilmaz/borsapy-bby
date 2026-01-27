@@ -115,6 +115,10 @@ class TradeInfo(BaseModel):
     shares: float = 0.0
     profit: Optional[float] = None
     profit_pct: Optional[float] = None
+    entry_indicators: Dict[str, Any] = {}
+    exit_indicators: Dict[str, Any] = {}
+    entry_reason: str = ""
+    exit_reason: str = ""
 
 
 class BacktestResult(BaseModel):
@@ -200,6 +204,10 @@ async def run_backtest(
         # Convert trades to serializable format
         trades = []
         for trade in result.trades:
+            # Convert numpy types in indicators to Python types
+            entry_ind = {k: float(v) if hasattr(v, 'item') else v for k, v in trade.entry_indicators.items()}
+            exit_ind = {k: float(v) if hasattr(v, 'item') else v for k, v in trade.exit_indicators.items()}
+
             trades.append(TradeInfo(
                 entry_time=trade.entry_time.isoformat() if trade.entry_time else None,
                 entry_price=trade.entry_price,
@@ -209,6 +217,10 @@ async def run_backtest(
                 shares=trade.shares,
                 profit=trade.profit,
                 profit_pct=trade.profit_pct,
+                entry_indicators=entry_ind,
+                exit_indicators=exit_ind,
+                entry_reason=trade.entry_reason,
+                exit_reason=trade.exit_reason,
             ))
 
         # Convert equity curve to serializable format

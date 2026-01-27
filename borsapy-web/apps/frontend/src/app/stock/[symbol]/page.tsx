@@ -570,14 +570,15 @@ export default function StockPage() {
           <CardTitle>Fiyat Aralığı</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {/* Daily Range */}
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Günlük</p>
-              <div className="flex justify-between">
-                <span>Düşük: {formatNumber(stock.low)}</span>
-                <span>Yüksek: {formatNumber(stock.high)}</span>
+              <p className="text-sm font-medium text-muted-foreground">Günlük</p>
+              <div className="flex justify-between text-sm">
+                <span>{formatNumber(stock.low)}</span>
+                <span>{formatNumber(stock.high)}</span>
               </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden relative">
                 <div
                   className="h-full bg-primary"
                   style={{
@@ -588,11 +589,76 @@ export default function StockPage() {
                 />
               </div>
             </div>
+
+            {/* 7 Day Range */}
+            {technicals?.price_ranges?.["7d"] && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">7 Gün</p>
+                <div className="flex justify-between text-sm">
+                  <span>{formatNumber(technicals.price_ranges["7d"].low)}</span>
+                  <span>{formatNumber(technicals.price_ranges["7d"].high)}</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{
+                      width: technicals.price_ranges["7d"].high && technicals.price_ranges["7d"].low && stock.last_price
+                        ? `${((stock.last_price - technicals.price_ranges["7d"].low) / (technicals.price_ranges["7d"].high - technicals.price_ranges["7d"].low)) * 100}%`
+                        : "50%",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 50 Day Range */}
+            {technicals?.price_ranges?.["50d"] && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">50 Gün</p>
+                <div className="flex justify-between text-sm">
+                  <span>{formatNumber(technicals.price_ranges["50d"].low)}</span>
+                  <span>{formatNumber(technicals.price_ranges["50d"].high)}</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{
+                      width: technicals.price_ranges["50d"].high && technicals.price_ranges["50d"].low && stock.last_price
+                        ? `${((stock.last_price - technicals.price_ranges["50d"].low) / (technicals.price_ranges["50d"].high - technicals.price_ranges["50d"].low)) * 100}%`
+                        : "50%",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 200 Day Range */}
+            {technicals?.price_ranges?.["200d"] && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">200 Gün</p>
+                <div className="flex justify-between text-sm">
+                  <span>{formatNumber(technicals.price_ranges["200d"].low)}</span>
+                  <span>{formatNumber(technicals.price_ranges["200d"].high)}</span>
+                </div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{
+                      width: technicals.price_ranges["200d"].high && technicals.price_ranges["200d"].low && stock.last_price
+                        ? `${((stock.last_price - technicals.price_ranges["200d"].low) / (technicals.price_ranges["200d"].high - technicals.price_ranges["200d"].low)) * 100}%`
+                        : "50%",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 52 Week Range */}
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">52 Hafta</p>
-              <div className="flex justify-between">
-                <span>Düşük: {formatNumber(stock.year_low)}</span>
-                <span>Yüksek: {formatNumber(stock.year_high)}</span>
+              <p className="text-sm font-medium text-muted-foreground">52 Hafta</p>
+              <div className="flex justify-between text-sm">
+                <span>{formatNumber(stock.year_low)}</span>
+                <span>{formatNumber(stock.year_high)}</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div

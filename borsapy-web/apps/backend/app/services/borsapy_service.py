@@ -155,6 +155,19 @@ class BorsapyService:
     def get_technicals(self, symbol: str, period: str = "1y") -> dict:
         """Get technical analysis signals with crossover detection."""
         import pandas as pd
+        import numpy as np
+
+        def to_python(val):
+            """Convert numpy types to native Python types for JSON serialization."""
+            if val is None or (isinstance(val, float) and np.isnan(val)):
+                return None
+            if isinstance(val, (np.integer, np.int64, np.int32)):
+                return int(val)
+            if isinstance(val, (np.floating, np.float64, np.float32)):
+                return float(val)
+            if isinstance(val, np.ndarray):
+                return val.tolist()
+            return val
 
         ticker = bp.Ticker(symbol)
         df = ticker.history(period=period)
@@ -162,15 +175,20 @@ class BorsapyService:
         if df.empty:
             return {}
 
-        # Calculate indicators
+        # Calculate indicators - add base indicators
         df = bp.add_indicators(df, ["rsi", "macd", "sma", "ema", "bollinger", "atr", "stochastic"])
+
+        # Add additional SMA periods (50, 200)
+        from borsapy.technical import calculate_sma
+        df["SMA_50"] = calculate_sma(df, period=50)
+        df["SMA_200"] = calculate_sma(df, period=200)
 
         # Reset index to have Date as a column
         df = df.reset_index()
 
         # Get last values
         last = df.iloc[-1]
-        current_price = last.get("Close", 0)
+        current_price = to_python(last.get("Close", 0))
 
         # Helper to detect crossovers
         def find_crossover(fast_col: str, slow_col: str, lookback: int = 60) -> dict:
@@ -197,7 +215,7 @@ class BorsapyService:
             return {
                 "type": cross_type,
                 "date": cross_date,
-                "days_ago": len(df) - crosses.index[-1] - 1
+                "days_ago": int(len(df) - crosses.index[-1] - 1)
             }
 
         # Detect crossovers
@@ -208,8 +226,8 @@ class BorsapyService:
         # Generate signals
         signals = []
 
-        # RSI signals
-        rsi = last.get("RSI")
+        # RSI signals (column name is RSI_14)
+        rsi = last.get("RSI_14") or last.get("RSI")
         if rsi is not None:
             if rsi < 30:
                 signals.append({"indicator": "RSI", "signal": "Aşırı satım bölgesinde", "type": "bullish"})
@@ -263,22 +281,38 @@ class BorsapyService:
             elif stoch_k > 80:
                 signals.append({"indicator": "Stochastic", "signal": "Aşırı alım bölgesinde", "type": "bearish"})
 
+        # Calculate price ranges for different periods
+        def get_price_range(days: int) -> dict:
+            if len(df) < days:
+                return None
+            period_df = df.tail(days)
+            return {
+                "low": to_python(period_df["Low"].min()),
+                "high": to_python(period_df["High"].max()),
+            }
+
+        price_ranges = {
+            "7d": get_price_range(7),
+            "50d": get_price_range(50),
+            "200d": get_price_range(200),
+        }
+
         return {
             "indicators": {
-                "rsi": rsi,
-                "macd": macd_val,
-                "macd_signal": macd_sig,
-                "sma_20": sma_20,
-                "sma_50": sma_50,
-                "sma_200": sma_200,
-                "ema_12": last.get("EMA_12"),
-                "ema_26": last.get("EMA_26"),
-                "bollinger_upper": bb_upper,
-                "bollinger_lower": bb_lower,
-                "bollinger_mid": last.get("BB_Mid") if "BB_Mid" in df.columns else None,
-                "atr": last.get("ATR"),
-                "stoch_k": stoch_k,
-                "stoch_d": last.get("Stoch_D"),
+                "rsi": to_python(rsi),
+                "macd": to_python(macd_val),
+                "macd_signal": to_python(macd_sig),
+                "sma_20": to_python(sma_20),
+                "sma_50": to_python(sma_50),
+                "sma_200": to_python(sma_200),
+                "ema_12": to_python(last.get("EMA_12")),
+                "ema_26": to_python(last.get("EMA_26")),
+                "bollinger_upper": to_python(bb_upper),
+                "bollinger_lower": to_python(bb_lower),
+                "bollinger_mid": to_python(last.get("BB_Middle")),
+                "atr": to_python(last.get("ATR_14") or last.get("ATR")),
+                "stoch_k": to_python(stoch_k),
+                "stoch_d": to_python(last.get("Stoch_D")),
             },
             "crossovers": {
                 "sma_50_200": sma_50_200_cross,
@@ -287,6 +321,7 @@ class BorsapyService:
             },
             "signals": signals,
             "current_price": current_price,
+            "price_ranges": price_ranges,
         }
 
     def get_performance(self, symbol: str) -> dict:
@@ -366,17 +401,214 @@ class BorsapyService:
 
     def run_technical_scan(
         self,
-        scan_type: str,
-        index: Optional[str] = None,
-    ) -> List[dict]:
-        """Run technical scanner."""
+        conditions: List[str],
+        universe: str = "XU100",
+        interval: str = "1d",
+        limit: int = 100,
+    ) -> dict:
+        """Run technical scanner with multiple conditions.
+
+        Args:
+            conditions: List of condition strings (e.g., ["rsi < 30", "volume > 1M"])
+            universe: Index symbol (e.g., "XU030", "XU100") or comma-separated symbols
+            interval: Timeframe ("1d", "1h", "4h", "1W", etc.)
+            limit: Maximum number of results
+
+        Returns:
+            Dict with results, count, conditions, and metadata
+        """
         scanner = bp.TechnicalScanner()
 
-        if index:
-            scanner.set_index(index)
+        # Set universe
+        if "," in universe:
+            # Custom symbol list
+            symbols = [s.strip().upper() for s in universe.split(",")]
+            scanner.set_universe(symbols)
+        else:
+            scanner.set_universe(universe.upper())
 
-        results = scanner.scan(scan_type)
-        return results.to_dict(orient="records") if hasattr(results, "to_dict") else results
+        # Add conditions
+        for condition in conditions:
+            scanner.add_condition(condition)
+
+        # Set interval
+        scanner.set_interval(interval)
+
+        # Run scan
+        df = scanner.run(limit=limit)
+
+        if df.empty:
+            return {
+                "results": [],
+                "count": 0,
+                "conditions": conditions,
+                "universe": universe,
+                "interval": interval,
+            }
+
+        # Convert to records
+        results = df.to_dict(orient="records")
+
+        # Clean up numpy types
+        def to_python(val):
+            if val is None:
+                return None
+            if hasattr(val, 'item'):
+                return val.item()
+            if isinstance(val, list):
+                return [to_python(v) for v in val]
+            return val
+
+        cleaned_results = []
+        for row in results:
+            cleaned_row = {k: to_python(v) for k, v in row.items()}
+            cleaned_results.append(cleaned_row)
+
+        return {
+            "results": cleaned_results,
+            "count": len(cleaned_results),
+            "conditions": conditions,
+            "universe": universe,
+            "interval": interval,
+        }
+
+    def get_scan_presets(self) -> List[dict]:
+        """Get predefined scan presets."""
+        return [
+            {
+                "id": "rsi_oversold",
+                "name": "RSI Aşırı Satım",
+                "description": "RSI < 30 olan hisseler",
+                "conditions": ["rsi < 30"],
+                "category": "momentum",
+            },
+            {
+                "id": "rsi_overbought",
+                "name": "RSI Aşırı Alım",
+                "description": "RSI > 70 olan hisseler",
+                "conditions": ["rsi > 70"],
+                "category": "momentum",
+            },
+            {
+                "id": "macd_bullish",
+                "name": "MACD Boğa Kesişimi",
+                "description": "MACD sinyal çizgisinin üzerinde",
+                "conditions": ["macd > signal"],
+                "category": "trend",
+            },
+            {
+                "id": "macd_bearish",
+                "name": "MACD Ayı Kesişimi",
+                "description": "MACD sinyal çizgisinin altında",
+                "conditions": ["macd < signal"],
+                "category": "trend",
+            },
+            {
+                "id": "golden_cross",
+                "name": "Altın Kesişim",
+                "description": "SMA20 > SMA50 olan hisseler",
+                "conditions": ["sma_20 > sma_50"],
+                "category": "trend",
+            },
+            {
+                "id": "death_cross",
+                "name": "Ölüm Kesişimi",
+                "description": "SMA20 < SMA50 olan hisseler",
+                "conditions": ["sma_20 < sma_50"],
+                "category": "trend",
+            },
+            {
+                "id": "price_above_sma50",
+                "name": "Fiyat SMA50 Üstünde",
+                "description": "Kapanış fiyatı 50 günlük ortalamanın üzerinde",
+                "conditions": ["close > sma_50"],
+                "category": "trend",
+            },
+            {
+                "id": "price_below_sma50",
+                "name": "Fiyat SMA50 Altında",
+                "description": "Kapanış fiyatı 50 günlük ortalamanın altında",
+                "conditions": ["close < sma_50"],
+                "category": "trend",
+            },
+            {
+                "id": "high_volume",
+                "name": "Yüksek Hacim",
+                "description": "Hacim > 5M",
+                "conditions": ["volume > 5M"],
+                "category": "volume",
+            },
+            {
+                "id": "oversold_with_volume",
+                "name": "Aşırı Satım + Hacim",
+                "description": "RSI < 30 ve yüksek hacim",
+                "conditions": ["rsi < 30", "volume > 1M"],
+                "category": "combo",
+            },
+            {
+                "id": "bullish_momentum",
+                "name": "Boğa Momentum",
+                "description": "RSI 50-70 arası ve fiyat SMA50 üstünde",
+                "conditions": ["rsi > 50", "rsi < 70", "close > sma_50"],
+                "category": "combo",
+            },
+            {
+                "id": "stoch_oversold",
+                "name": "Stochastic Aşırı Satım",
+                "description": "Stochastic K < 20",
+                "conditions": ["stoch_k < 20"],
+                "category": "momentum",
+            },
+        ]
+
+    def get_available_indicators(self) -> List[dict]:
+        """Get available indicators for scanning."""
+        return [
+            {"category": "Fiyat", "indicators": [
+                {"id": "close", "name": "Kapanış", "description": "Kapanış fiyatı"},
+                {"id": "open", "name": "Açılış", "description": "Açılış fiyatı"},
+                {"id": "high", "name": "Yüksek", "description": "Günün en yüksek fiyatı"},
+                {"id": "low", "name": "Düşük", "description": "Günün en düşük fiyatı"},
+                {"id": "volume", "name": "Hacim", "description": "İşlem hacmi (1M = 1 milyon)"},
+                {"id": "change_percent", "name": "Değişim %", "description": "Yüzde değişim"},
+            ]},
+            {"category": "RSI", "indicators": [
+                {"id": "rsi", "name": "RSI (14)", "description": "14 periyot RSI"},
+                {"id": "rsi_7", "name": "RSI (7)", "description": "7 periyot RSI"},
+            ]},
+            {"category": "SMA", "indicators": [
+                {"id": "sma_5", "name": "SMA 5", "description": "5 periyot basit hareketli ortalama"},
+                {"id": "sma_10", "name": "SMA 10", "description": "10 periyot basit hareketli ortalama"},
+                {"id": "sma_20", "name": "SMA 20", "description": "20 periyot basit hareketli ortalama"},
+                {"id": "sma_50", "name": "SMA 50", "description": "50 periyot basit hareketli ortalama"},
+                {"id": "sma_100", "name": "SMA 100", "description": "100 periyot basit hareketli ortalama"},
+                {"id": "sma_200", "name": "SMA 200", "description": "200 periyot basit hareketli ortalama"},
+            ]},
+            {"category": "EMA", "indicators": [
+                {"id": "ema_12", "name": "EMA 12", "description": "12 periyot üssel hareketli ortalama"},
+                {"id": "ema_20", "name": "EMA 20", "description": "20 periyot üssel hareketli ortalama"},
+                {"id": "ema_26", "name": "EMA 26", "description": "26 periyot üssel hareketli ortalama"},
+                {"id": "ema_50", "name": "EMA 50", "description": "50 periyot üssel hareketli ortalama"},
+                {"id": "ema_200", "name": "EMA 200", "description": "200 periyot üssel hareketli ortalama"},
+            ]},
+            {"category": "MACD", "indicators": [
+                {"id": "macd", "name": "MACD", "description": "MACD çizgisi"},
+                {"id": "signal", "name": "Sinyal", "description": "MACD sinyal çizgisi"},
+                {"id": "histogram", "name": "Histogram", "description": "MACD histogram"},
+            ]},
+            {"category": "Stochastic", "indicators": [
+                {"id": "stoch_k", "name": "Stoch %K", "description": "Stochastic K çizgisi"},
+                {"id": "stoch_d", "name": "Stoch %D", "description": "Stochastic D çizgisi"},
+            ]},
+            {"category": "Diğer", "indicators": [
+                {"id": "adx", "name": "ADX", "description": "Average Directional Index"},
+                {"id": "atr", "name": "ATR", "description": "Average True Range"},
+                {"id": "cci", "name": "CCI", "description": "Commodity Channel Index"},
+                {"id": "bb_upper", "name": "BB Üst", "description": "Bollinger üst bant"},
+                {"id": "bb_middle", "name": "BB Orta", "description": "Bollinger orta bant"},
+                {"id": "bb_lower", "name": "BB Alt", "description": "Bollinger alt bant"},
+            ]},
+        ]
 
 
 @lru_cache()
