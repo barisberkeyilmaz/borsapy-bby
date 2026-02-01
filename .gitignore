@@ -19,3 +19,7 @@ test_realtime.py
 # Internal docs
 docs/colendi_integration_plan.md
 docs/alert_system_plan.md
+
+# Playwright
+playwright-report/
+test-results/
