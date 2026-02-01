@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AddStockDialog } from "@/components/portfolio/add-stock-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
+import { StockChart } from "@/components/charts/stock-chart";
 import { stocksApi } from "@/lib/api";
 import { formatNumber, formatPercent, formatMarketCap, cn } from "@/lib/utils";
 import {
@@ -47,6 +48,7 @@ export default function StockPage() {
   const params = useParams();
   const symbol = params.symbol as string;
   const [portfolioDialogOpen, setPortfolioDialogOpen] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState("6mo");
   const addHolding = usePortfolioStore((state) => state.addHolding);
 
   const { data: stock, isLoading } = useQuery({
@@ -63,6 +65,11 @@ export default function StockPage() {
   const { data: performance, isLoading: performanceLoading } = useQuery({
     queryKey: ["stock", symbol, "performance"],
     queryFn: () => stocksApi.getPerformance(symbol),
+  });
+
+  const { data: historyData, isLoading: historyLoading } = useQuery({
+    queryKey: ["stock", symbol, "history", chartPeriod],
+    queryFn: () => stocksApi.getHistory(symbol, chartPeriod, "1d"),
   });
 
   const handleAddToPortfolio = () => {
@@ -196,6 +203,24 @@ export default function StockPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Price Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart2 className="h-5 w-5" />
+            Fiyat Grafiği
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StockChart
+            data={historyData || []}
+            isLoading={historyLoading}
+            period={chartPeriod}
+            onPeriodChange={setChartPeriod}
+          />
+        </CardContent>
+      </Card>
 
       {/* Performance Section */}
       <Card>
@@ -357,7 +382,7 @@ export default function StockPage() {
                           SMA 20/50 {technicals.crossovers.sma_20_50.type === "bullish" ? "Yükseliş" : "Düşüş"} Kesişimi
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          SMA 20, SMA 50'yi {technicals.crossovers.sma_20_50.type === "bullish" ? "yukarı" : "aşağı"} kesti
+                          SMA 20, SMA 50&apos;yi {technicals.crossovers.sma_20_50.type === "bullish" ? "yukarı" : "aşağı"} kesti
                         </p>
                       </div>
                       <div className="text-right">

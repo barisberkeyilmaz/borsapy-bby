@@ -318,3 +318,32 @@ export const scannerApi = {
   getUniverses: () => fetchApi<Universe[]>("/api/scanner/universes"),
   getIntervals: () => fetchApi<Interval[]>("/api/scanner/intervals"),
 };
+
+// Compare API
+export interface ComparePerformance {
+  symbols: string[];
+  dates: string[];
+  series: Record<string, { dates: string[]; values: number[] }>;
+}
+
+export interface SectorComparison {
+  symbol: string;
+  sector: string | null;
+  metrics: Record<string, {
+    stock_value: number | null;
+    sector_avg: number | null;
+    vs_sector: number | null;
+  }>;
+  sector_stocks: Record<string, unknown>[];
+  stock_count?: number;
+  error?: string;
+}
+
+export const compareApi = {
+  getStocks: (symbols: string[]) =>
+    fetchApi<StockInfo[]>(`/api/compare/stocks?symbols=${symbols.join(",")}`),
+  getPerformance: (symbols: string[], period = "1y") =>
+    fetchApi<ComparePerformance>(`/api/compare/performance?symbols=${symbols.join(",")}&period=${period}`),
+  getSectorComparison: (symbol: string) =>
+    fetchApi<SectorComparison>(`/api/compare/sector/${symbol}`),
+};

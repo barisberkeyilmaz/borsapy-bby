@@ -611,6 +611,168 @@ class BorsapyService:
         ]
 
 
+    def get_multiple_stocks_info(self, symbols: List[str]) -> List[dict]:
+        """Get info for multiple stocks at once."""
+        results = []
+        for symbol in symbols:
+            try:
+                info = self.get_stock_info(symbol.upper())
+                results.append(info)
+            except Exception:
+                # Skip stocks that fail
+                pass
+        return results
+
+    def get_compare_performance(
+        self,
+        symbols: List[str],
+        period: str = "1y",
+    ) -> dict:
+        """Get normalized performance data for comparing multiple stocks.
+
+        Returns performance series where all prices are normalized to 100 at start.
+        """
+        import pandas as pd
+        import numpy as np
+
+        result = {
+            "symbols": [],
+            "dates": [],
+            "series": {},
+        }
+
+        all_dfs = []
+        valid_symbols = []
+
+        for symbol in symbols:
+            try:
+                ticker = bp.Ticker(symbol.upper())
+                df = ticker.history(period=period)
+                if not df.empty:
+                    df = df.reset_index()
+                    df["symbol"] = symbol.upper()
+                    all_dfs.append(df)
+                    valid_symbols.append(symbol.upper())
+            except Exception:
+                continue
+
+        if not all_dfs:
+            return result
+
+        result["symbols"] = valid_symbols
+
+        # Find common date range
+        min_date = max(df["Date"].min() for df in all_dfs)
+        max_date = min(df["Date"].max() for df in all_dfs)
+
+        # Normalize and align data
+        for symbol, df in zip(valid_symbols, all_dfs):
+            df = df[(df["Date"] >= min_date) & (df["Date"] <= max_date)]
+            if df.empty:
+                continue
+
+            # Normalize to 100 at start
+            first_price = df.iloc[0]["Close"]
+            df["normalized"] = (df["Close"] / first_price) * 100
+
+            # Format dates
+            dates = df["Date"].dt.strftime("%Y-%m-%d").tolist()
+            values = df["normalized"].round(2).tolist()
+
+            result["series"][symbol] = {
+                "dates": dates,
+                "values": values,
+            }
+
+        # Use first symbol's dates as reference
+        if valid_symbols and valid_symbols[0] in result["series"]:
+            result["dates"] = result["series"][valid_symbols[0]]["dates"]
+
+        return result
+
+    def get_sector_comparison(self, symbol: str) -> dict:
+        """Get sector comparison data for a stock.
+
+        Returns the stock's metrics compared to sector average.
+        """
+        import pandas as pd
+
+        try:
+            ticker = bp.Ticker(symbol.upper())
+            info = ticker.info
+            fast_info = ticker.fast_info
+
+            # Try to get sector from info
+            sector = info.get("sector")
+
+            if not sector:
+                return {
+                    "symbol": symbol.upper(),
+                    "sector": None,
+                    "metrics": {},
+                    "sector_stocks": [],
+                    "error": "Sector information not available",
+                }
+
+            # Get sector stocks using screener
+            screener = bp.Screener()
+            screener.set_sector(sector)
+            sector_df = screener.run()
+
+            if sector_df.empty:
+                return {
+                    "symbol": symbol.upper(),
+                    "sector": sector,
+                    "metrics": {},
+                    "sector_stocks": [],
+                    "error": "No sector data available",
+                }
+
+            # Calculate sector averages
+            numeric_cols = sector_df.select_dtypes(include=[float, int]).columns
+            sector_avg = sector_df[numeric_cols].mean()
+
+            # Stock values
+            stock_data = {
+                "pe_ratio": fast_info.pe_ratio,
+                "pb_ratio": fast_info.pb_ratio,
+                "market_cap": fast_info.market_cap,
+            }
+
+            # Build comparison metrics
+            metrics = {}
+            for key, value in stock_data.items():
+                col_name = key.replace("_", " ").title()
+                if value is not None and key in sector_avg.index:
+                    avg = sector_avg[key]
+                    if avg and avg != 0:
+                        metrics[key] = {
+                            "stock_value": round(value, 2) if value else None,
+                            "sector_avg": round(avg, 2) if avg else None,
+                            "vs_sector": round(((value - avg) / avg) * 100, 1) if value and avg else None,
+                        }
+
+            # Get top stocks in sector for ranking
+            sector_stocks = sector_df.head(20).to_dict(orient="records") if not sector_df.empty else []
+
+            return {
+                "symbol": symbol.upper(),
+                "sector": sector,
+                "metrics": metrics,
+                "sector_stocks": sector_stocks,
+                "stock_count": len(sector_df),
+            }
+
+        except Exception as e:
+            return {
+                "symbol": symbol.upper(),
+                "sector": None,
+                "metrics": {},
+                "sector_stocks": [],
+                "error": str(e),
+            }
+
+
 @lru_cache()
 def get_borsapy_service() -> BorsapyService:
     """Get cached borsapy service instance."""

@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import screener, stocks, indices, scanner, backtest, market
+from app.routers import screener, stocks, indices, scanner, backtest, market, compare
 
 app = FastAPI(
     title="borsapy API",
@@ -27,6 +27,7 @@ app.include_router(indices.router, prefix="/api/indices", tags=["indices"])
 app.include_router(scanner.router, prefix="/api/scanner", tags=["scanner"])
 app.include_router(backtest.router, prefix="/api/backtest", tags=["backtest"])
 app.include_router(market.router, prefix="/api/market", tags=["market"])
+app.include_router(compare.router, prefix="/api/compare", tags=["compare"])
 
 
 @app.get("/")

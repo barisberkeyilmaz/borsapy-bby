@@ -13,17 +13,17 @@ import {
   Briefcase,
   TrendingUp,
   Activity,
-  LayoutGrid,
   X,
   Loader2,
+  GitCompare,
 } from "lucide-react";
 
 const navigation = [
   { name: "Screener", href: "/screener", icon: Search },
   { name: "Portfolio", href: "/portfolio", icon: Briefcase },
+  { name: "Karsilastir", href: "/compare", icon: GitCompare },
   { name: "Scanner", href: "/scanner", icon: Activity },
   { name: "Backtest", href: "/backtest", icon: TrendingUp },
-  { name: "Indices", href: "/indices", icon: LayoutGrid },
 ];
 
 export function Header() {

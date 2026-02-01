@@ -185,7 +185,11 @@ export function StockChart({ data, isLoading, period, onPeriodChange }: StockCha
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      chart.remove();
+      try {
+        chart.remove();
+      } catch {
+        // Chart may already be removed
+      }
     };
   }, []);
 
@@ -225,6 +229,22 @@ export function StockChart({ data, isLoading, period, onPeriodChange }: StockCha
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-[400px] w-full" />
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="space-y-4">
+        <ChartControls
+          selectedPeriod={period}
+          onPeriodChange={onPeriodChange}
+          showSMA={showSMA}
+          onToggleSMA={() => setShowSMA(!showSMA)}
+        />
+        <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+          Grafik verisi bulunamadi
+        </div>
       </div>
     );
   }
