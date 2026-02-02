@@ -3,11 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { ScreenerTable } from "@/components/tables/screener-table";
 
 jest.mock("next/link", () => {
-  return ({ href, children, ...props }: any) => (
+  const MockLink = ({ href, children, ...props }: any) => (
     <a href={href} {...props}>
       {children}
     </a>
   );
+  MockLink.displayName = "MockLink";
+  return MockLink;
 });
 
 test("renders empty state", () => {

@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -77,7 +79,7 @@ export default function ScreenerPage() {
     setSector,
   } = useScreenerStore();
 
-  const addHolding = usePortfolioStore((state) => state.addHolding);
+  const { addHolding } = usePortfolioStore();
 
   const { data: templates, isLoading: templatesLoading } = useTemplates();
   const { data: sectors } = useSectors();

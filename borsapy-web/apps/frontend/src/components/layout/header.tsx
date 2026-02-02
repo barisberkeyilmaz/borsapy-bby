@@ -16,6 +16,7 @@ import {
   X,
   Loader2,
   GitCompare,
+  Settings,
 } from "lucide-react";
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: "Karsilastir", href: "/compare", icon: GitCompare },
   { name: "Scanner", href: "/scanner", icon: Activity },
   { name: "Backtest", href: "/backtest", icon: TrendingUp },
+  { name: "Ayarlar", href: "/settings", icon: Settings },
 ];
 
 export function Header() {

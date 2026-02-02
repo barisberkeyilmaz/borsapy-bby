@@ -559,6 +559,42 @@ class BorsapyService:
                 "conditions": ["stoch_k < 20"],
                 "category": "momentum",
             },
+            # Swing Trading Presets
+            {
+                "id": "swing_pullback_sma20",
+                "name": "SMA20 Pullback",
+                "description": "Yükselen trendde SMA20'ye çekilmiş hisseler",
+                "conditions": ["close > sma_50", "close <= sma_20 * 1.02", "close >= sma_20 * 0.98", "rsi > 40", "rsi < 60"],
+                "category": "swing",
+            },
+            {
+                "id": "swing_pullback_bb",
+                "name": "BB Alt Band Pullback",
+                "description": "Bollinger alt bandına temas eden yükseliş trendindeki hisseler",
+                "conditions": ["close > sma_50", "close <= bb_lower * 1.01"],
+                "category": "swing",
+            },
+            {
+                "id": "swing_breakout",
+                "name": "Hacimli Direnç Kırımı",
+                "description": "SMA50'yi hacimle kıran hisseler",
+                "conditions": ["close > sma_50", "volume > 2M", "change_percent > 3"],
+                "category": "swing",
+            },
+            {
+                "id": "swing_momentum",
+                "name": "Güçlü Momentum",
+                "description": "MACD ve RSI uyumlu momentum hisseleri",
+                "conditions": ["macd > signal", "rsi > 50", "rsi < 70", "close > sma_20"],
+                "category": "swing",
+            },
+            {
+                "id": "swing_reversal",
+                "name": "Momentum Dönüşü",
+                "description": "Aşırı satımdan dönüş sinyali veren hisseler",
+                "conditions": ["rsi < 35", "stoch_k < 20", "macd > signal"],
+                "category": "swing",
+            },
         ]
 
     def get_available_indicators(self) -> List[dict]:
@@ -610,6 +646,110 @@ class BorsapyService:
             ]},
         ]
 
+
+    def calculate_swing_levels(
+        self,
+        symbol: str,
+        entry_price: Optional[float] = None,
+        stop_loss_atr: float = 2.0,
+        take_profit_atr: float = 3.0,
+    ) -> dict:
+        """Calculate ATR-based swing trading levels.
+
+        Args:
+            symbol: Stock symbol
+            entry_price: Custom entry price (defaults to current price)
+            stop_loss_atr: ATR multiplier for stop-loss
+            take_profit_atr: ATR multiplier for take-profit
+
+        Returns:
+            Dict with price levels, ATR info, and support/resistance
+        """
+        import numpy as np
+
+        def to_python(val):
+            """Convert numpy types to native Python types for JSON serialization."""
+            if val is None or (isinstance(val, float) and np.isnan(val)):
+                return None
+            if isinstance(val, (np.integer, np.int64, np.int32)):
+                return int(val)
+            if isinstance(val, (np.floating, np.float64, np.float32)):
+                return float(val)
+            return val
+
+        ticker = bp.Ticker(symbol.upper())
+        df = ticker.history(period="6mo")
+
+        if df.empty:
+            raise ValueError(f"No data found for symbol {symbol}")
+
+        # Calculate ATR
+        df = bp.add_indicators(df, ["atr", "bollinger"])
+        df = df.reset_index()
+
+        last = df.iloc[-1]
+        current_price = to_python(last.get("Close", 0))
+        atr = to_python(last.get("ATR_14") or last.get("ATR"))
+
+        # Use entry price or current price
+        price = entry_price if entry_price is not None else current_price
+
+        # Calculate ATR-based levels
+        atr_levels = None
+        if atr and price:
+            stop_loss = price - (atr * stop_loss_atr)
+            take_profit = price + (atr * take_profit_atr)
+            stop_loss_pct = ((price - stop_loss) / price) * 100
+            take_profit_pct = ((take_profit - price) / price) * 100
+            risk_reward = take_profit_atr / stop_loss_atr if stop_loss_atr > 0 else 0
+
+            atr_levels = {
+                "stop_loss": round(stop_loss, 2),
+                "stop_loss_percent": round(stop_loss_pct, 2),
+                "take_profit": round(take_profit, 2),
+                "take_profit_percent": round(take_profit_pct, 2),
+                "risk_reward": round(risk_reward, 2),
+            }
+
+        # Calculate support and resistance levels using pivot points
+        support_levels = []
+        resistance_levels = []
+
+        # Use recent price action to identify key levels
+        recent_df = df.tail(50)
+        if not recent_df.empty:
+            # Find local minima (supports)
+            lows = recent_df["Low"].values
+            for i in range(2, len(lows) - 2):
+                if lows[i] < lows[i-1] and lows[i] < lows[i-2] and lows[i] < lows[i+1] and lows[i] < lows[i+2]:
+                    support_levels.append(round(float(lows[i]), 2))
+
+            # Find local maxima (resistances)
+            highs = recent_df["High"].values
+            for i in range(2, len(highs) - 2):
+                if highs[i] > highs[i-1] and highs[i] > highs[i-2] and highs[i] > highs[i+1] and highs[i] > highs[i+2]:
+                    resistance_levels.append(round(float(highs[i]), 2))
+
+            # Add Bollinger bands as dynamic support/resistance
+            bb_lower = to_python(last.get("BB_Lower"))
+            bb_upper = to_python(last.get("BB_Upper"))
+            if bb_lower and bb_lower not in support_levels:
+                support_levels.append(round(bb_lower, 2))
+            if bb_upper and bb_upper not in resistance_levels:
+                resistance_levels.append(round(bb_upper, 2))
+
+        # Sort and limit to 3 most relevant levels
+        support_levels = sorted(set(support_levels), reverse=True)[:3]
+        resistance_levels = sorted(set(resistance_levels))[:3]
+
+        return {
+            "symbol": symbol.upper(),
+            "current_price": current_price,
+            "atr": round(atr, 2) if atr else None,
+            "atr_levels": atr_levels,
+            "support_levels": support_levels,
+            "resistance_levels": resistance_levels,
+        }
 
     def get_multiple_stocks_info(self, symbols: List[str]) -> List[dict]:
         """Get info for multiple stocks at once."""

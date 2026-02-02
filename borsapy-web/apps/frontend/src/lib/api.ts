@@ -347,3 +347,37 @@ export const compareApi = {
   getSectorComparison: (symbol: string) =>
     fetchApi<SectorComparison>(`/api/compare/sector/${symbol}`),
 };
+
+// Trading API
+export interface ATRLevels {
+  stop_loss: number;
+  stop_loss_percent: number;
+  take_profit: number;
+  take_profit_percent: number;
+  risk_reward: number;
+}
+
+export interface SwingLevels {
+  symbol: string;
+  current_price: number;
+  atr: number | null;
+  atr_levels: ATRLevels | null;
+  support_levels: number[];
+  resistance_levels: number[];
+}
+
+export const tradingApi = {
+  getSwingLevels: (
+    symbol: string,
+    entryPrice?: number,
+    stopLossATR = 2.0,
+    takeProfitATR = 3.0
+  ) => {
+    const params = new URLSearchParams();
+    if (entryPrice !== undefined) params.append("entry_price", String(entryPrice));
+    params.append("stop_loss_atr", String(stopLossATR));
+    params.append("take_profit_atr", String(takeProfitATR));
+    const query = params.toString();
+    return fetchApi<SwingLevels>(`/api/trading/${symbol}/swing-levels${query ? `?${query}` : ""}`);
+  },
+};

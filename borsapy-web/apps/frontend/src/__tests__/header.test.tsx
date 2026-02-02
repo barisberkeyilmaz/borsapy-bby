@@ -12,11 +12,13 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("next/link", () => {
-  return ({ href, children, ...props }: any) => (
+  const MockLink = ({ href, children, ...props }: any) => (
     <a href={href} {...props}>
       {children}
     </a>
   );
+  MockLink.displayName = "MockLink";
+  return MockLink;
 });
 
 jest.mock("@/hooks/useDebounce", () => ({

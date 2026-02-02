@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Providers } from "./providers";
-import { Header } from "@/components/layout/header";
+import { ClientWrapper } from "./client-wrapper";
+
+export const dynamic = "force-dynamic";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,14 +20,7 @@ export default function RootLayout({
   return (
     <html lang="tr" className="dark">
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-background">
-            <Header />
-            <main className="container mx-auto px-4 py-6">
-              {children}
-            </main>
-          </div>
-        </Providers>
+        <ClientWrapper>{children}</ClientWrapper>
       </body>
     </html>
   );

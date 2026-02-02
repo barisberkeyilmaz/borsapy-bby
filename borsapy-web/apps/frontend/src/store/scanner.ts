@@ -1,5 +1,4 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { useSyncExternalStore } from "react";
 
 export interface ScanCondition {
   id: string;
@@ -19,94 +18,173 @@ interface ScannerState {
   universe: string;
   interval: string;
   savedScans: SavedScan[];
-
-  // Actions
-  addCondition: (condition: string, name?: string) => void;
-  removeCondition: (id: string) => void;
-  updateCondition: (id: string, condition: string) => void;
-  clearConditions: () => void;
-  setConditions: (conditions: ScanCondition[]) => void;
-  setUniverse: (universe: string) => void;
-  setInterval: (interval: string) => void;
-
-  // Saved scans
-  saveScan: (name: string) => void;
-  loadScan: (name: string) => void;
-  deleteScan: (name: string) => void;
 }
 
+const STORAGE_KEY = "borsapy-scanner";
 let conditionIdCounter = 0;
 
-export const useScannerStore = create<ScannerState>()(
-  persist(
-    (set, get) => ({
+class ScannerStore {
+  private state: ScannerState = {
+    conditions: [],
+    universe: "XU100",
+    interval: "1d",
+    savedScans: [],
+  };
+  private listeners: Set<() => void> = new Set();
+
+  constructor() {
+    if (typeof window !== "undefined") {
+      this.loadFromStorage();
+    }
+  }
+
+  private loadFromStorage() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        this.state = { ...this.state, savedScans: data.savedScans || [] };
+      }
+    } catch (e) {
+      console.error("Failed to load scanner:", e);
+    }
+  }
+
+  private saveToStorage() {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedScans: this.state.savedScans }));
+    }
+  }
+
+  private notify() {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  getState(): ScannerState {
+    return this.state;
+  }
+
+  getServerSnapshot(): ScannerState {
+    return {
       conditions: [],
       universe: "XU100",
       interval: "1d",
       savedScans: [],
+    };
+  }
 
-      addCondition: (condition, name) =>
-        set((state) => ({
-          conditions: [
-            ...state.conditions,
-            { id: `cond-${++conditionIdCounter}`, condition, name },
-          ],
-        })),
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
 
-      removeCondition: (id) =>
-        set((state) => ({
-          conditions: state.conditions.filter((c) => c.id !== id),
-        })),
+  addCondition(condition: string, name?: string) {
+    this.state = {
+      ...this.state,
+      conditions: [
+        ...this.state.conditions,
+        { id: `cond-${++conditionIdCounter}`, condition, name },
+      ],
+    };
+    this.notify();
+  }
 
-      updateCondition: (id, condition) =>
-        set((state) => ({
-          conditions: state.conditions.map((c) =>
-            c.id === id ? { ...c, condition } : c
-          ),
-        })),
+  removeCondition(id: string) {
+    this.state = {
+      ...this.state,
+      conditions: this.state.conditions.filter((c) => c.id !== id),
+    };
+    this.notify();
+  }
 
-      clearConditions: () => set({ conditions: [] }),
+  updateCondition(id: string, condition: string) {
+    this.state = {
+      ...this.state,
+      conditions: this.state.conditions.map((c) =>
+        c.id === id ? { ...c, condition } : c
+      ),
+    };
+    this.notify();
+  }
 
-      setConditions: (conditions) => set({ conditions }),
+  clearConditions() {
+    this.state = { ...this.state, conditions: [] };
+    this.notify();
+  }
 
-      setUniverse: (universe) => set({ universe }),
+  setConditions(conditions: ScanCondition[]) {
+    this.state = { ...this.state, conditions };
+    this.notify();
+  }
 
-      setInterval: (interval) => set({ interval }),
+  setUniverse(universe: string) {
+    this.state = { ...this.state, universe };
+    this.notify();
+  }
 
-      saveScan: (name) =>
-        set((state) => ({
-          savedScans: [
-            ...state.savedScans.filter((s) => s.name !== name),
-            {
-              name,
-              conditions: state.conditions,
-              universe: state.universe,
-              interval: state.interval,
-            },
-          ],
-        })),
+  setInterval(interval: string) {
+    this.state = { ...this.state, interval };
+    this.notify();
+  }
 
-      loadScan: (name) =>
-        set((state) => {
-          const saved = state.savedScans.find((s) => s.name === name);
-          if (saved) {
-            return {
-              conditions: saved.conditions,
-              universe: saved.universe,
-              interval: saved.interval,
-            };
-          }
-          return {};
-        }),
+  saveScan(name: string) {
+    const newSavedScans = [
+      ...this.state.savedScans.filter((s) => s.name !== name),
+      {
+        name,
+        conditions: this.state.conditions,
+        universe: this.state.universe,
+        interval: this.state.interval,
+      },
+    ];
+    this.state = { ...this.state, savedScans: newSavedScans };
+    this.saveToStorage();
+    this.notify();
+  }
 
-      deleteScan: (name) =>
-        set((state) => ({
-          savedScans: state.savedScans.filter((s) => s.name !== name),
-        })),
-    }),
-    {
-      name: "borsapy-scanner",
-      partialize: (state) => ({ savedScans: state.savedScans }),
+  loadScan(name: string) {
+    const saved = this.state.savedScans.find((s) => s.name === name);
+    if (saved) {
+      this.state = {
+        ...this.state,
+        conditions: saved.conditions,
+        universe: saved.universe,
+        interval: saved.interval,
+      };
+      this.notify();
     }
-  )
-);
+  }
+
+  deleteScan(name: string) {
+    this.state = {
+      ...this.state,
+      savedScans: this.state.savedScans.filter((s) => s.name !== name),
+    };
+    this.saveToStorage();
+    this.notify();
+  }
+}
+
+export const scannerStore = new ScannerStore();
+
+export function useScannerStore() {
+  const state = useSyncExternalStore(
+    (callback) => scannerStore.subscribe(callback),
+    () => scannerStore.getState(),
+    () => scannerStore.getServerSnapshot()
+  );
+
+  return {
+    ...state,
+    addCondition: scannerStore.addCondition.bind(scannerStore),
+    removeCondition: scannerStore.removeCondition.bind(scannerStore),
+    updateCondition: scannerStore.updateCondition.bind(scannerStore),
+    clearConditions: scannerStore.clearConditions.bind(scannerStore),
+    setConditions: scannerStore.setConditions.bind(scannerStore),
+    setUniverse: scannerStore.setUniverse.bind(scannerStore),
+    setInterval: scannerStore.setInterval.bind(scannerStore),
+    saveScan: scannerStore.saveScan.bind(scannerStore),
+    loadScan: scannerStore.loadScan.bind(scannerStore),
+    deleteScan: scannerStore.deleteScan.bind(scannerStore),
+  };
+}

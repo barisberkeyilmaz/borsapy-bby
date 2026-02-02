@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AddStockDialog } from "@/components/portfolio/add-stock-dialog";
 import { Tooltip } from "@/components/ui/tooltip";
 import { StockChart } from "@/components/charts/stock-chart";
+import { PositionCalculator } from "@/components/trading/position-calculator";
 import { stocksApi } from "@/lib/api";
 import { formatNumber, formatPercent, formatMarketCap, cn } from "@/lib/utils";
 import {
@@ -46,10 +47,10 @@ const METRIC_TOOLTIPS = {
 
 export default function StockPage() {
   const params = useParams();
-  const symbol = params.symbol as string;
+  const symbol = (params?.symbol as string) || "";
   const [portfolioDialogOpen, setPortfolioDialogOpen] = useState(false);
   const [chartPeriod, setChartPeriod] = useState("6mo");
-  const addHolding = usePortfolioStore((state) => state.addHolding);
+  const { addHolding } = usePortfolioStore();
 
   const { data: stock, isLoading } = useQuery({
     queryKey: ["stock", symbol],
@@ -278,7 +279,12 @@ export default function StockPage() {
       </Card>
 
       {/* Technical Analysis Section */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Position Calculator */}
+        {stock.last_price && (
+          <PositionCalculator symbol={symbol} currentPrice={stock.last_price} />
+        )}
+
         {/* Signals */}
         <Card>
           <CardHeader>
