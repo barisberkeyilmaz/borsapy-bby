@@ -1,40 +1,58 @@
-"use client";
-
-export const dynamic = "force-dynamic";
-
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { marketApi } from "@/lib/api";
 import { formatNumber, formatPercent, cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { IndicesRefreshButton } from "./indices-refresh-button";
 
-export default function IndicesPage() {
-  const { data: market, isLoading } = useQuery({
-    queryKey: ["market", "summary"],
-    queryFn: marketApi.getSummary,
-    refetchInterval: 30 * 1000,
-  });
+// ISR: Revalidate every 60 seconds
+export const revalidate = 60;
+
+interface MarketIndex {
+  name: string;
+  value: number;
+  change: number;
+  change_percent: number;
+}
+
+interface MarketSummary {
+  indices: MarketIndex[];
+}
+
+async function getMarketSummary(): Promise<MarketSummary | null> {
+  try {
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const response = await fetch(`${API_BASE_URL}/api/market/summary`, {
+      next: { revalidate: 60 },
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export default async function IndicesPage() {
+  const market = await getMarketSummary();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Endeksler</h1>
-        <p className="text-muted-foreground">
-          BIST endeksleri ve performansları
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Endeksler</h1>
+          <p className="text-muted-foreground">
+            BIST endeksleri ve performanslari
+          </p>
+        </div>
+        <IndicesRefreshButton />
       </div>
 
-      {isLoading ? (
+      {market?.indices && market.indices.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {market?.indices?.map((index) => {
+          {market.indices.map((index) => {
             const isPositive = (index.change_percent ?? 0) >= 0;
             return (
               <Card key={index.name}>
@@ -63,12 +81,10 @@ export default function IndicesPage() {
             );
           })}
         </div>
-      )}
-
-      {!market?.indices?.length && !isLoading && (
+      ) : (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Endeks verisi yüklenemedi</p>
+            <p className="text-muted-foreground">Endeks verisi yuklenemedi</p>
           </CardContent>
         </Card>
       )}

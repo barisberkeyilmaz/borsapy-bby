@@ -100,6 +100,9 @@ class PortfolioStore {
 
 export const portfolioStore = new PortfolioStore();
 
+// Cached server snapshot to avoid infinite loop warning
+const SERVER_SNAPSHOT = { holdings: [] as Holding[] };
+
 // React hook that subscribes to the store
 import { useSyncExternalStore } from "react";
 
@@ -107,7 +110,7 @@ export function usePortfolioStore() {
   const state = useSyncExternalStore(
     (callback) => portfolioStore.subscribe(callback),
     () => portfolioStore.getState(),
-    () => ({ holdings: [] }) // Server snapshot - empty state
+    () => SERVER_SNAPSHOT
   );
 
   return {

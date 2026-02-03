@@ -366,6 +366,55 @@ export interface SwingLevels {
   resistance_levels: number[];
 }
 
+export interface PriceLevel {
+  price: number;
+  type: "support" | "resistance";
+  strength: number;
+  source: string;
+}
+
+export interface TradingSignal {
+  date: string;
+  time: number;
+  price: number;
+  signal_type: "buy" | "sell";
+  reason: string;
+  indicator: string;
+  strength: "strong" | "medium";
+}
+
+export interface TradeSetup {
+  active: boolean;
+  direction: "long" | "short" | "neutral";
+  entry_price: number;
+  stop_loss: number | null;
+  stop_loss_percent: number | null;
+  take_profit_1: number | null;
+  take_profit_2: number | null;
+  take_profit_3: number | null;
+  risk_reward: number | null;
+  reasons: string[];
+}
+
+export interface SwingSignals {
+  symbol: string;
+  current_price: number;
+  atr: number | null;
+  levels: PriceLevel[];
+  signals: TradingSignal[];
+  trade_setup: TradeSetup | null;
+}
+
+export interface AnalysisSummary {
+  symbol: string;
+  sentiment: "bullish" | "bearish" | "neutral";
+  sentiment_score: number;
+  summary_text: string;
+  key_points: string[];
+  warnings: string[];
+  generated_at: string;
+}
+
 export const tradingApi = {
   getSwingLevels: (
     symbol: string,
@@ -380,4 +429,8 @@ export const tradingApi = {
     const query = params.toString();
     return fetchApi<SwingLevels>(`/api/trading/${symbol}/swing-levels${query ? `?${query}` : ""}`);
   },
+  getSwingSignals: (symbol: string, period = "6mo", interval = "1d") =>
+    fetchApi<SwingSignals>(`/api/trading/${symbol}/swing-signals?period=${period}&interval=${interval}`),
+  getAnalysisSummary: (symbol: string, period = "6mo") =>
+    fetchApi<AnalysisSummary>(`/api/trading/${symbol}/analysis-summary?period=${period}`),
 };

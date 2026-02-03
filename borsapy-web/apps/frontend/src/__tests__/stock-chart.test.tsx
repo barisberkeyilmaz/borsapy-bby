@@ -11,16 +11,23 @@ jest.mock("lightweight-charts", () => ({
     addSeries: () => ({
       setData: setDataMock,
       applyOptions: applyOptionsMock,
+      createPriceLine: jest.fn(),
     }),
     priceScale: () => ({ applyOptions: applyOptionsMock }),
-    timeScale: () => ({ fitContent: fitContentMock }),
+    timeScale: () => ({
+      fitContent: fitContentMock,
+      subscribeVisibleTimeRangeChange: jest.fn(),
+      unsubscribeVisibleTimeRangeChange: jest.fn(),
+    }),
     applyOptions: applyOptionsMock,
     remove: jest.fn(),
+    removeSeries: jest.fn(),
   }),
   ColorType: { Solid: "solid" },
   CandlestickSeries: "CandlestickSeries",
   HistogramSeries: "HistogramSeries",
   LineSeries: "LineSeries",
+  AreaSeries: "AreaSeries",
 }));
 
 const sampleData = [
@@ -31,19 +38,31 @@ const sampleData = [
 
 test("renders empty state when no data", () => {
   render(
-    <StockChart data={[]} period="1mo" onPeriodChange={jest.fn()} isLoading={false} />
+    <StockChart
+      data={[]}
+      period="1mo"
+      interval="1d"
+      onPeriodChange={jest.fn()}
+      onIntervalChange={jest.fn()}
+      isLoading={false}
+    />
   );
 
   expect(screen.getByText("Grafik verisi bulunamadi")).toBeInTheDocument();
 });
 
-test("toggles SMA legend", async () => {
-  const user = userEvent.setup();
+test("renders chart with data", async () => {
   render(
-    <StockChart data={sampleData} period="1mo" onPeriodChange={jest.fn()} isLoading={false} />
+    <StockChart
+      data={sampleData}
+      period="1mo"
+      interval="1d"
+      onPeriodChange={jest.fn()}
+      onIntervalChange={jest.fn()}
+      isLoading={false}
+    />
   );
 
-  expect(screen.getByText("SMA 20")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "SMA" }));
-  expect(screen.queryByText("SMA 20")).not.toBeInTheDocument();
+  // Chart container should be rendered
+  expect(screen.getByText("Gosterge")).toBeInTheDocument();
 });

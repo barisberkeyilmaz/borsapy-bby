@@ -1,11 +1,11 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
-import { useState } from "react";
+import { Suspense, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StockSelector } from "@/components/compare/stock-selector";
 import { ComparisonTable } from "@/components/compare/comparison-table";
 import { PerformanceChart } from "@/components/compare/performance-chart";
@@ -22,10 +22,61 @@ const PERIODS = [
   { value: "2y", label: "2 Yil" },
 ];
 
-export default function ComparePage() {
-  const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
-  const [period, setPeriod] = useState("1y");
-  const [sectorSymbol, setSectorSymbol] = useState<string | null>(null);
+function ComparePageContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // Read state from URL
+  const selectedSymbols = useMemo(() => {
+    const symbolsParam = searchParams?.get("symbols");
+    return symbolsParam ? symbolsParam.split(",").filter(Boolean) : [];
+  }, [searchParams]);
+
+  const period = searchParams?.get("period") || "1y";
+
+  const sectorSymbol = searchParams?.get("sector") || null;
+
+  // Update URL helpers
+  const updateUrl = useCallback(
+    (updates: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams?.toString() || "");
+
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === "") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      });
+
+      const queryString = params.toString();
+      const path = pathname || "/compare";
+      router.push(queryString ? `${path}?${queryString}` : path, { scroll: false });
+    },
+    [searchParams, router, pathname]
+  );
+
+  const setSelectedSymbols = useCallback(
+    (symbols: string[]) => {
+      updateUrl({ symbols: symbols.length > 0 ? symbols.join(",") : null });
+    },
+    [updateUrl]
+  );
+
+  const setPeriod = useCallback(
+    (newPeriod: string) => {
+      updateUrl({ period: newPeriod });
+    },
+    [updateUrl]
+  );
+
+  const setSectorSymbol = useCallback(
+    (symbol: string | null) => {
+      updateUrl({ sector: symbol });
+    },
+    [updateUrl]
+  );
 
   const {
     data: stocksData,
@@ -135,7 +186,7 @@ export default function ComparePage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
                   <PieChart className="h-4 w-4" />
-                  Sektör Analizi
+                  Sektor Analizi
                 </CardTitle>
                 <div className="flex gap-1">
                   {selectedSymbols.map((symbol) => (
@@ -155,21 +206,21 @@ export default function ComparePage() {
             <CardContent>
               {!sectorSymbol ? (
                 <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                  Sektör analizi için yukarıdan bir hisse seçin
+                  Sektor analizi icin yukaridan bir hisse secin
                 </div>
               ) : (
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                       <PieChart className="h-4 w-4" />
-                      Sektör Ortalamasına Göre
+                      Sektor Ortalamasina Gore
                     </h4>
                     <SectorRadar data={sectorData} isLoading={sectorLoading} />
                   </div>
                   <div>
                     <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                       <ListOrdered className="h-4 w-4" />
-                      Sektör Sıralaması
+                      Sektor Siralamasi
                     </h4>
                     <SectorRanking data={sectorData} isLoading={sectorLoading} />
                   </div>
@@ -192,5 +243,32 @@ export default function ComparePage() {
         </Card>
       )}
     </div>
+  );
+}
+
+function ComparePageLoading() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-96 mt-2" />
+      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <Skeleton className="h-5 w-32" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-10 w-full" />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={<ComparePageLoading />}>
+      <ComparePageContent />
+    </Suspense>
   );
 }

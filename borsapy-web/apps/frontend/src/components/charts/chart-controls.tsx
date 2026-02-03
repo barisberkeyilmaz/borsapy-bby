@@ -12,9 +12,10 @@ interface ChartControlsProps {
 
 const PERIODS = [
   { value: "1d", label: "1G" },
-  { value: "1wk", label: "1H" },
+  { value: "5d", label: "1H" },
   { value: "1mo", label: "1A" },
   { value: "3mo", label: "3A" },
+  { value: "6mo", label: "6A" },
   { value: "1y", label: "1Y" },
   { value: "5y", label: "5Y" },
 ];

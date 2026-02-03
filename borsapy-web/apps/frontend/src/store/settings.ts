@@ -22,6 +22,11 @@ const DEFAULT_TRADING_SETTINGS: TradingSettings = {
 
 const STORAGE_KEY = "borsapy-settings";
 
+// Cached server snapshot to avoid infinite loop warning
+const SERVER_SNAPSHOT: SettingsState = {
+  trading: { ...DEFAULT_TRADING_SETTINGS },
+};
+
 class SettingsStore {
   private state: SettingsState = {
     trading: { ...DEFAULT_TRADING_SETTINGS },
@@ -63,9 +68,7 @@ class SettingsStore {
   }
 
   getServerSnapshot(): SettingsState {
-    return {
-      trading: { ...DEFAULT_TRADING_SETTINGS },
-    };
+    return SERVER_SNAPSHOT;
   }
 
   subscribe(listener: () => void) {

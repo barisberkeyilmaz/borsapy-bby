@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -40,14 +40,25 @@ export function PositionCalculator({ symbol, currentPrice }: PositionCalculatorP
   const { addHolding } = usePortfolioStore();
 
   const [entryPrice, setEntryPrice] = useState<number>(currentPrice);
+  const [isManualEntryPrice, setIsManualEntryPrice] = useState(false);
   const [stopLossATR, setStopLossATR] = useState<number>(defaultStopLossATR);
   const [takeProfitATR, setTakeProfitATR] = useState<number>(defaultTakeProfitATR);
   const [riskPercent, setRiskPercent] = useState<number>(defaultRiskPercent);
+  const lastSymbolRef = useRef<string | null>(null);
 
   // Update entry price when current price changes
   useEffect(() => {
-    setEntryPrice(currentPrice);
-  }, [currentPrice]);
+    if (lastSymbolRef.current !== symbol) {
+      lastSymbolRef.current = symbol;
+      setIsManualEntryPrice(false);
+      setEntryPrice(currentPrice);
+      return;
+    }
+
+    if (!isManualEntryPrice) {
+      setEntryPrice(currentPrice);
+    }
+  }, [currentPrice, symbol, isManualEntryPrice]);
 
   // Fetch swing levels from API
   const { data: swingLevels, isLoading } = useQuery({
@@ -55,6 +66,7 @@ export function PositionCalculator({ symbol, currentPrice }: PositionCalculatorP
     queryFn: () => tradingApi.getSwingLevels(symbol, entryPrice, stopLossATR, takeProfitATR),
     enabled: !!symbol && entryPrice > 0,
     staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   // Calculate position sizing
@@ -122,7 +134,7 @@ export function PositionCalculator({ symbol, currentPrice }: PositionCalculatorP
     });
   };
 
-  if (isLoading) {
+  if (isLoading && !swingLevels) {
     return (
       <Card>
         <CardHeader className="pb-2">
@@ -166,7 +178,10 @@ export function PositionCalculator({ symbol, currentPrice }: PositionCalculatorP
               type="number"
               step="0.01"
               value={entryPrice}
-              onChange={(e) => setEntryPrice(Number(e.target.value))}
+              onChange={(e) => {
+                setEntryPrice(Number(e.target.value));
+                setIsManualEntryPrice(true);
+              }}
               className="h-9"
             />
           </div>

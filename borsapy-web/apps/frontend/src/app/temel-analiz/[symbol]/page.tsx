@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StockDetailClient } from "./stock-detail-client";
-import { StockInfo, TechnicalAnalysis, Performance } from "@/lib/api";
+import { TemelAnalizClient } from "./temel-analiz-client";
+import { StockInfo, Performance, SectorComparison } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -9,18 +9,6 @@ async function getStockInfo(symbol: string): Promise<StockInfo | null> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/stocks/${symbol}`, {
       next: { revalidate: 30 },
-    });
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
-  }
-}
-
-async function getTechnicals(symbol: string): Promise<TechnicalAnalysis | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/stocks/${symbol}/technicals`, {
-      next: { revalidate: 60 },
     });
     if (!response.ok) return null;
     return response.json();
@@ -41,7 +29,19 @@ async function getPerformance(symbol: string): Promise<Performance | null> {
   }
 }
 
-function StockDetailSkeleton() {
+async function getSectorComparison(symbol: string): Promise<SectorComparison | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/compare/sector/${symbol}`, {
+      next: { revalidate: 300 }, // 5 minutes cache for sector data
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+function TemelAnalizSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-32 w-full" />
@@ -50,7 +50,6 @@ function StockDetailSkeleton() {
           <Skeleton key={i} className="h-24" />
         ))}
       </div>
-      <Skeleton className="h-64 w-full" />
     </div>
   );
 }
@@ -59,36 +58,35 @@ interface PageProps {
   params: Promise<{ symbol: string }>;
 }
 
-export default async function StockPage({ params }: PageProps) {
+export default async function TemelAnalizDetailPage({ params }: PageProps) {
   const { symbol } = await params;
   const upperSymbol = symbol.toUpperCase();
 
   // Fetch initial data in parallel
-  const [stock, technicals, performance] = await Promise.all([
+  const [stock, performance, sectorComparison] = await Promise.all([
     getStockInfo(upperSymbol),
-    getTechnicals(upperSymbol),
     getPerformance(upperSymbol),
+    getSectorComparison(upperSymbol),
   ]);
 
   return (
-    <Suspense fallback={<StockDetailSkeleton />}>
-      <StockDetailClient
+    <Suspense fallback={<TemelAnalizSkeleton />}>
+      <TemelAnalizClient
         symbol={upperSymbol}
         initialStock={stock}
-        initialTechnicals={technicals}
         initialPerformance={performance}
+        initialSectorComparison={sectorComparison}
       />
     </Suspense>
   );
 }
 
-// Generate metadata for the page
 export async function generateMetadata({ params }: PageProps) {
   const { symbol } = await params;
   const upperSymbol = symbol.toUpperCase();
 
   return {
-    title: `${upperSymbol} - Hisse Detay | BorsaPy`,
-    description: `${upperSymbol} hisse senedi detaylari, fiyat, teknik ve temel analiz bilgileri`,
+    title: `${upperSymbol} - Temel Analiz | BorsaPy`,
+    description: `${upperSymbol} temel analiz, finansal metrikler ve sektor karsilastirmalari`,
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import {
   BarChart3,
   Search,
-  Briefcase,
   TrendingUp,
   Activity,
   X,
@@ -20,17 +19,19 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Screener", href: "/screener", icon: Search },
-  { name: "Portfolio", href: "/portfolio", icon: Briefcase },
-  { name: "Karsilastir", href: "/compare", icon: GitCompare },
+  { name: "Teknik Analiz", href: "/teknik-analiz", icon: TrendingUp },
+  { name: "Temel Analiz", href: "/temel-analiz", icon: BarChart3 },
   { name: "Scanner", href: "/scanner", icon: Activity },
-  { name: "Backtest", href: "/backtest", icon: TrendingUp },
+  { name: "Karsilastir", href: "/compare", icon: GitCompare },
+  { name: "Backtest", href: "/backtest", icon: Search },
   { name: "Ayarlar", href: "/settings", icon: Settings },
 ];
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -78,7 +79,10 @@ export function Header() {
   const handleSelectResult = (symbol: string) => {
     setSearchQuery("");
     setShowDropdown(false);
-    router.push(`/stock/${symbol}`);
+    setNavigatingTo(symbol);
+    startTransition(() => {
+      router.push(`/stock/${symbol}`);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -159,12 +163,17 @@ export function Header() {
                   <button
                     key={result.symbol}
                     onClick={() => handleSelectResult(result.symbol)}
-                    className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
+                    disabled={isPending}
+                    className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between transition-colors disabled:opacity-50"
                   >
                     <span className="font-medium">{result.symbol}</span>
-                    <span className="text-sm text-muted-foreground truncate ml-2 max-w-[180px]">
-                      {result.name}
-                    </span>
+                    {navigatingTo === result.symbol ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <span className="text-sm text-muted-foreground truncate ml-2 max-w-[180px]">
+                        {result.name}
+                      </span>
+                    )}
                   </button>
                 ))
               ) : (
